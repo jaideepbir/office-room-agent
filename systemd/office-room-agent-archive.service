@@ -1,0 +1,12 @@
+[Unit]
+Description=Archive office room capture artifacts to NVMe storage
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=jaideepbir
+Group=jaideepbir
+WorkingDirectory=/home/jaideepbir/code/projects/office-room-agent
+ExecStart=/home/jaideepbir/code/projects/office-room-agent/scripts/archive_runs.sh
+TimeoutStartSec=5min

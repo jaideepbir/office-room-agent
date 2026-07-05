@@ -1,0 +1,11 @@
+[Unit]
+Description=Continuously archive office room capture artifacts
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=10s
+Unit=office-room-agent-archive.service
+
+[Install]
+WantedBy=timers.target

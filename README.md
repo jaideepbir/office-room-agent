@@ -9,6 +9,11 @@ Runtime data is intentionally outside the repo:
 - Error log: `~/office-room-agent-data/logs/agent-errors.log`
 - Reports: `~/office-room-agent-data/reports/report-YYYY-MM-DD.md`
 
+Artifacts are also archived every minute to NVMe storage on `pi5d05`:
+
+- Archive target: `192.168.1.108:/mnt/nas02/office-room-agent-archive/pi4book/`
+- Archive log: `~/office-room-agent-data/logs/archive.log`
+
 ## Hardware Defaults
 
 - Pan servo: BCM GPIO 13
@@ -31,14 +36,18 @@ Check service status:
 
 ```bash
 systemctl status office-room-agent.timer --no-pager
+systemctl status office-room-agent-archive.timer --no-pager
 systemctl list-timers office-room-agent.timer
+systemctl list-timers office-room-agent-archive.timer
 ```
 
 Watch logs:
 
 ```bash
 journalctl -u office-room-agent.service -f
+journalctl -u office-room-agent-archive.service -f
 tail -f ~/office-room-agent-data/logs/agent-errors.log
+tail -f ~/office-room-agent-data/logs/archive.log
 ```
 
 Run one scan pass manually:
