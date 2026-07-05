@@ -22,7 +22,10 @@
     "settle_seconds": 0.0,
     "smooth_move_ms": 20000,
     "step_ms": 120,
-    "pre_record_settle_seconds": 5.0
+    "pre_record_settle_seconds": 5.0,
+    "control_mode": "pulsewidth",
+    "pulse_min_us": 500,
+    "pulse_max_us": 2500
   },
   "scan_positions": [
     {

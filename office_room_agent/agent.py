@@ -297,9 +297,19 @@ class OfficeRoomAgent:
     def map_angle(angle: float, in_min=-90.0, in_max=90.0, out_min=250.0, out_max=1250.0) -> float:
         return (angle - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
+    @staticmethod
+    def map_pulsewidth(angle: float, in_min=-90.0, in_max=90.0, out_min=500.0, out_max=2500.0) -> float:
+        return (angle - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+
     def set_servo(self, pin: int, angle: float) -> None:
         pi = self.ensure_servo()
         if pi is None:
+            return
+        servo_cfg = self.config["servo"]
+        if servo_cfg.get("control_mode") == "pulsewidth":
+            pulse_min = float(servo_cfg.get("pulse_min_us", 500))
+            pulse_max = float(servo_cfg.get("pulse_max_us", 2500))
+            pi.set_servo_pulsewidth(pin, self.map_pulsewidth(angle, out_min=pulse_min, out_max=pulse_max))
             return
         pi.set_PWM_frequency(pin, 50)
         pi.set_PWM_range(pin, 10000)
