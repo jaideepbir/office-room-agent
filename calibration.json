@@ -1,0 +1,41 @@
+{
+  "boundaries": {
+    "bottom_right": {
+      "pan": 0,
+      "tilt": 10,
+      "captured_at": "2026-07-05T00:12:34-04:00",
+      "image": "/home/jaideepbir/office-room-agent-data/calibration/calibration-center-pan0-tilt10-20260705-001234.jpg"
+    },
+    "bottom_center": {
+      "pan": 5,
+      "tilt": 10,
+      "captured_at": "2026-07-05T00:16:59-04:00",
+      "image": "/home/jaideepbir/office-room-agent-data/calibration/calibration-bottom-left-candidate-pan5-tilt10-20260705-001659.jpg"
+    },
+    "top_left": {
+      "pan": 45,
+      "tilt": -15,
+      "captured_at": "2026-07-05T00:29:58-04:00",
+      "image": "/home/jaideepbir/office-room-agent-data/calibration/calibration-top-left-candidate-pan45-tilt-15-slow-20260705-002958.jpg"
+    }
+  },
+  "bounding_box": {
+    "top_left": {
+      "pan": 45,
+      "tilt": -15
+    },
+    "top_right": {
+      "pan": 0,
+      "tilt": -15
+    },
+    "bottom_left": {
+      "pan": 45,
+      "tilt": 10
+    },
+    "bottom_right": {
+      "pan": 0,
+      "tilt": 10
+    },
+    "source": "Derived from accepted top_left pan=45 tilt=-15 and bottom_right pan=0 tilt=10"
+  }
+}

@@ -14,58 +14,58 @@
     "enabled": true,
     "pan_pin": 13,
     "tilt_pin": 12,
-    "pan_min": -30,
-    "pan_max": 30,
-    "tilt_min": -20,
-    "tilt_max": 20,
-    "settle_seconds": 0.45,
-    "smooth_move_ms": 400
+    "pan_min": 0,
+    "pan_max": 45,
+    "tilt_min": -15,
+    "tilt_max": 10,
+    "settle_seconds": 2.0,
+    "smooth_move_ms": 2500
   },
   "scan_positions": [
     {
-      "name": "left_up",
-      "pan": -30,
-      "tilt": 20
+      "name": "top_left",
+      "pan": 45,
+      "tilt": -15
     },
     {
-      "name": "center_up",
+      "name": "top_center",
+      "pan": 22.5,
+      "tilt": -15
+    },
+    {
+      "name": "top_right",
       "pan": 0,
-      "tilt": 20
+      "tilt": -15
     },
     {
-      "name": "right_up",
-      "pan": 30,
-      "tilt": 20
+      "name": "middle_left",
+      "pan": 45,
+      "tilt": -2.5
     },
     {
-      "name": "left_center",
-      "pan": -30,
-      "tilt": 0
+      "name": "middle_center",
+      "pan": 22.5,
+      "tilt": -2.5
     },
     {
-      "name": "center",
+      "name": "middle_right",
       "pan": 0,
-      "tilt": 0
+      "tilt": -2.5
     },
     {
-      "name": "right_center",
-      "pan": 30,
-      "tilt": 0
+      "name": "bottom_left",
+      "pan": 45,
+      "tilt": 10
     },
     {
-      "name": "left_down",
-      "pan": -30,
-      "tilt": -20
+      "name": "bottom_center",
+      "pan": 22.5,
+      "tilt": 10
     },
     {
-      "name": "center_down",
+      "name": "bottom_right",
       "pan": 0,
-      "tilt": -20
-    },
-    {
-      "name": "right_down",
-      "pan": 30,
-      "tilt": -20
+      "tilt": 10
     }
   ],
   "observation": {
