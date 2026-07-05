@@ -20,9 +20,10 @@
     "tilt_min": -15,
     "tilt_max": 10,
     "settle_seconds": 1.0,
-    "smooth_move_ms": 8000,
-    "step_ms": 80,
-    "pre_record_settle_seconds": 5.0
+    "smooth_move_ms": 10000,
+    "step_ms": 100,
+    "pre_record_settle_seconds": 7.0,
+    "release_before_record": true
   },
   "scan_positions": [
     {
@@ -78,13 +79,28 @@
   },
   "video_sweep_paths": [
     {
-      "name": "top_row_sweep",
+      "name": "top_left_stable_clip",
       "positions": [
         {
           "name": "top_left",
           "pan": 45,
           "tilt": -15
-        },
+        }
+      ]
+    },
+    {
+      "name": "top_center_stable_clip",
+      "positions": [
+        {
+          "name": "top_center",
+          "pan": 22.5,
+          "tilt": -15
+        }
+      ]
+    },
+    {
+      "name": "top_right_stable_clip",
+      "positions": [
         {
           "name": "top_right",
           "pan": 0,
@@ -93,13 +109,8 @@
       ]
     },
     {
-      "name": "middle_row_sweep",
+      "name": "middle_left_stable_clip",
       "positions": [
-        {
-          "name": "middle_right",
-          "pan": 0,
-          "tilt": -2.5
-        },
         {
           "name": "middle_left",
           "pan": 45,
@@ -108,13 +119,48 @@
       ]
     },
     {
-      "name": "bottom_row_sweep",
+      "name": "middle_center_stable_clip",
+      "positions": [
+        {
+          "name": "middle_center",
+          "pan": 22.5,
+          "tilt": -2.5
+        }
+      ]
+    },
+    {
+      "name": "middle_right_stable_clip",
+      "positions": [
+        {
+          "name": "middle_right",
+          "pan": 0,
+          "tilt": -2.5
+        }
+      ]
+    },
+    {
+      "name": "bottom_left_stable_clip",
       "positions": [
         {
           "name": "bottom_left",
           "pan": 45,
           "tilt": 10
-        },
+        }
+      ]
+    },
+    {
+      "name": "bottom_center_stable_clip",
+      "positions": [
+        {
+          "name": "bottom_center",
+          "pan": 22.5,
+          "tilt": 10
+        }
+      ]
+    },
+    {
+      "name": "bottom_right_stable_clip",
+      "positions": [
         {
           "name": "bottom_right",
           "pan": 0,
