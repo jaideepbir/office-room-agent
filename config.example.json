@@ -1,0 +1,40 @@
+{
+  "data_dir": "/home/jaideepbir/office-room-agent-data",
+  "capture_interval_seconds": 5,
+  "camera": {
+    "width": 1280,
+    "height": 720,
+    "timeout_ms": 1200,
+    "hflip": true,
+    "vflip": true,
+    "autofocus_mode": "auto",
+    "autofocus_on_capture": true
+  },
+  "servo": {
+    "enabled": true,
+    "pan_pin": 13,
+    "tilt_pin": 12,
+    "pan_min": -90,
+    "pan_max": 90,
+    "tilt_min": -70,
+    "tilt_max": 25,
+    "settle_seconds": 0.45,
+    "smooth_move_ms": 400
+  },
+  "scan_positions": [
+    {"name": "left_high", "pan": -80, "tilt": 15},
+    {"name": "center_high", "pan": 0, "tilt": 15},
+    {"name": "right_high", "pan": 80, "tilt": 15},
+    {"name": "left_mid", "pan": -80, "tilt": -20},
+    {"name": "center_mid", "pan": 0, "tilt": -20},
+    {"name": "right_mid", "pan": 80, "tilt": -20},
+    {"name": "left_low", "pan": -60, "tilt": -55},
+    {"name": "center_low", "pan": 0, "tilt": -55},
+    {"name": "right_low", "pan": 60, "tilt": -55}
+  ],
+  "observation": {
+    "lights_on_brightness_threshold": 85,
+    "person_confidence_threshold": 0.35,
+    "motion_threshold": 0.025
+  }
+}

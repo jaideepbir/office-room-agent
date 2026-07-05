@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CONFIG_PATH="$REPO_DIR/config.json"
+
+if [[ ! -f "$CONFIG_PATH" ]]; then
+  cp "$REPO_DIR/config.example.json" "$CONFIG_PATH"
+fi
+
+mkdir -p "$HOME/office-room-agent-data"/{images,logs,reports,state}
+
+sudo systemctl enable --now pigpiod
+sudo install -m 0644 "$REPO_DIR/systemd/office-room-agent.service" /etc/systemd/system/office-room-agent.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now office-room-agent.service
+
+systemctl status office-room-agent.service --no-pager
