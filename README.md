@@ -1,10 +1,11 @@
 # Office Room Agent
 
-Pan/tilt camera agent for `pi4book`. Every 10 minutes, systemd starts a 15-second capture window. During that window it captures timestamped images every five seconds, steps through configured pan/tilt positions, records each capture to a daily CSV, writes errors to a separate log, and generates a daily markdown report with observation notes.
+Pan/tilt camera agent for `pi4book`. Every 10 minutes, systemd starts a 15-second capture window. During that window it records a timestamped video clip while smoothly sweeping through the configured pan/tilt positions, records each run to a daily CSV, writes errors to a separate log, and generates a daily markdown report with observation notes.
 
 Runtime data is intentionally outside the repo:
 
 - Images: `~/office-room-agent-data/images/YYYY-MM-DD/`
+- Videos: `~/office-room-agent-data/videos/YYYY-MM-DD/`
 - Capture CSV logs: `~/office-room-agent-data/logs/captures-YYYY-MM-DD.csv`
 - Error log: `~/office-room-agent-data/logs/agent-errors.log`
 - Reports: `~/office-room-agent-data/reports/report-YYYY-MM-DD.md`
