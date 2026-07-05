@@ -11,8 +11,10 @@ fi
 mkdir -p "$HOME/office-room-agent-data"/{images,logs,reports,state}
 
 sudo systemctl enable --now pigpiod
+sudo systemctl disable --now office-room-agent.service 2>/dev/null || true
 sudo install -m 0644 "$REPO_DIR/systemd/office-room-agent.service" /etc/systemd/system/office-room-agent.service
+sudo install -m 0644 "$REPO_DIR/systemd/office-room-agent.timer" /etc/systemd/system/office-room-agent.timer
 sudo systemctl daemon-reload
-sudo systemctl enable --now office-room-agent.service
+sudo systemctl enable --now office-room-agent.timer
 
-systemctl status office-room-agent.service --no-pager
+systemctl status office-room-agent.timer --no-pager

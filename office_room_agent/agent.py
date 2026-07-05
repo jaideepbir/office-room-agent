@@ -81,14 +81,17 @@ class OfficeRoomAgent:
     def local_now() -> dt.datetime:
         return dt.datetime.now().astimezone()
 
-    def run(self) -> None:
+    def run(self, duration_seconds: float | None = None) -> None:
         signal.signal(signal.SIGTERM, self.request_stop)
         signal.signal(signal.SIGINT, self.request_stop)
         self.write_startup_note()
         positions = self.config["scan_positions"]
         interval = float(self.config["capture_interval_seconds"])
         index = 0
+        deadline = None if duration_seconds is None else time.monotonic() + duration_seconds
         while not self.stop_requested:
+            if deadline is not None and time.monotonic() >= deadline:
+                break
             started = time.monotonic()
             now = self.local_now()
             if now.date() != self.current_date:
@@ -100,7 +103,10 @@ class OfficeRoomAgent:
             row = self.capture_position(position)
             self.append_csv(row)
             elapsed = time.monotonic() - started
-            self.sleep_interruptible(max(0.0, interval - elapsed))
+            sleep_seconds = max(0.0, interval - elapsed)
+            if deadline is not None:
+                sleep_seconds = min(sleep_seconds, max(0.0, deadline - time.monotonic()))
+            self.sleep_interruptible(sleep_seconds)
         self.write_daily_report(self.current_date)
         self.center_servos()
         self.close_servo()
@@ -347,6 +353,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Office room pan/tilt camera capture agent")
     parser.add_argument("--config", default=str(Path.home() / "code/projects/office-room-agent/config.json"))
     parser.add_argument("--once", action="store_true", help="Capture one full scan pass and exit")
+    parser.add_argument("--duration-seconds", type=float, help="Run for a bounded capture window and exit")
     parser.add_argument("--report", help="Generate report for YYYY-MM-DD and exit")
     args = parser.parse_args()
 
@@ -363,7 +370,7 @@ def main() -> None:
         agent.center_servos()
         agent.close_servo()
         return
-    agent.run()
+    agent.run(duration_seconds=args.duration_seconds)
 
 
 if __name__ == "__main__":

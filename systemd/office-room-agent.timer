@@ -1,0 +1,11 @@
+[Unit]
+Description=Run office room capture window every 10 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=10min
+AccuracySec=10s
+Unit=office-room-agent.service
+
+[Install]
+WantedBy=timers.target

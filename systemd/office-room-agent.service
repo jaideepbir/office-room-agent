@@ -1,16 +1,15 @@
 [Unit]
-Description=Office room pan/tilt camera capture agent
+Description=Office room pan/tilt camera capture agent capture window
 After=network-online.target pigpiod.service
 Wants=network-online.target pigpiod.service
 
 [Service]
-Type=simple
+Type=oneshot
 User=jaideepbir
 Group=jaideepbir
 WorkingDirectory=/home/jaideepbir/code/projects/office-room-agent
-ExecStart=/usr/bin/python3 -m office_room_agent --config /home/jaideepbir/code/projects/office-room-agent/config.json
-Restart=always
-RestartSec=5
+ExecStart=/usr/bin/python3 -m office_room_agent --config /home/jaideepbir/code/projects/office-room-agent/config.json --duration-seconds 15
+TimeoutStartSec=30
 
 [Install]
 WantedBy=multi-user.target
