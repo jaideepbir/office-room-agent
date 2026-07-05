@@ -12,7 +12,7 @@
     "autofocus_on_capture": true
   },
   "servo": {
-    "enabled": false,
+    "enabled": true,
     "pan_pin": 13,
     "tilt_pin": 12,
     "pan_min": 0,
@@ -20,8 +20,9 @@
     "tilt_min": -15,
     "tilt_max": 10,
     "settle_seconds": 0.0,
-    "smooth_move_ms": 0,
-    "step_ms": 100
+    "smooth_move_ms": 20000,
+    "step_ms": 120,
+    "pre_record_settle_seconds": 5.0
   },
   "scan_positions": [
     {
@@ -77,12 +78,17 @@
   },
   "video_sweep_paths": [
     {
-      "name": "fixed_current_view",
+      "name": "top_right_to_bottom_left_sweep",
       "positions": [
         {
-          "name": "fixed_current_view",
+          "name": "top_right",
           "pan": 0,
-          "tilt": 0
+          "tilt": -15
+        },
+        {
+          "name": "bottom_left",
+          "pan": 45,
+          "tilt": 10
         }
       ]
     }
