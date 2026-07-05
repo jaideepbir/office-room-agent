@@ -202,26 +202,16 @@ class OfficeRoomAgent:
             first = positions[0]
             self.move_servos(float(first["pan"]), float(first["tilt"]))
             time.sleep(float(self.config["servo"].get("pre_record_settle_seconds", 4.0)))
-            self.log_power_status("before video")
-            release_before_record = bool(self.config["servo"].get("release_before_record", False))
-            if len(positions) <= 1 and release_before_record:
-                self.close_servo()
-            stop_event = None
-            servo_thread = None
-            if len(positions) > 1:
-                stop_event = threading.Event()
-                servo_thread = threading.Thread(
-                    target=self.sweep_servos,
-                    args=(positions, duration_seconds, stop_event),
-                    daemon=True,
-                )
-                servo_thread.start()
+            stop_event = threading.Event()
+            servo_thread = threading.Thread(
+                target=self.sweep_servos,
+                args=(positions, duration_seconds, stop_event),
+                daemon=True,
+            )
+            servo_thread.start()
             self.record_video(video_path, duration_seconds)
-            if stop_event is not None:
-                stop_event.set()
-            if servo_thread is not None:
-                servo_thread.join(timeout=5)
-            self.log_power_status("after video")
+            stop_event.set()
+            servo_thread.join(timeout=5)
             self.extract_thumbnail(video_path, thumbnail_path)
             row.update(self.observe(thumbnail_path))
         except Exception as exc:
@@ -245,13 +235,6 @@ class OfficeRoomAgent:
         path = paths[index]
         self.video_state_path.write_text(json.dumps({"index": index + 1}) + "\n", encoding="utf-8")
         return path["positions"], path.get("name", f"video_sweep_{index}")
-
-    def log_power_status(self, context: str) -> None:
-        proc = subprocess.run(["vcgencmd", "get_throttled"], text=True, capture_output=True, timeout=5)
-        if proc.returncode == 0:
-            logging.info("%s power status: %s", context, proc.stdout.strip())
-        else:
-            logging.warning("%s power status unavailable: %s", context, (proc.stderr or "").strip())
 
     def sweep_servos(self, positions: list[dict[str, Any]], duration_seconds: float, stop_event: threading.Event) -> None:
         servo_cfg = self.config["servo"]
