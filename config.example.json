@@ -1,25 +1,20 @@
 {
   "data_dir": "/home/jaideepbir/office-room-agent-data",
   "capture_mode": "video",
-  "capture_interval_seconds": 5,
   "camera": {
     "width": 1280,
     "height": 720,
     "timeout_ms": 1200,
     "hflip": true,
-    "vflip": true,
-    "autofocus_mode": "auto",
-    "autofocus_on_capture": true
+    "vflip": true
   },
   "servo": {
-    "enabled": true,
     "pan_pin": 13,
     "tilt_pin": 12,
     "pan_min": 0,
     "pan_max": 45,
     "tilt_min": -15,
     "tilt_max": 10,
-    "settle_seconds": 0.0,
     "smooth_move_ms": 20000,
     "step_ms": 120,
     "pre_record_settle_seconds": 5.0,
@@ -27,73 +22,24 @@
     "pulse_min_us": 500,
     "pulse_max_us": 2500
   },
-  "scan_positions": [
-    {
-      "name": "top_left",
-      "pan": 45,
-      "tilt": -15
-    },
-    {
-      "name": "top_center",
-      "pan": 22.5,
-      "tilt": -15
-    },
-    {
-      "name": "top_right",
-      "pan": 0,
-      "tilt": -15
-    },
-    {
-      "name": "middle_left",
-      "pan": 45,
-      "tilt": -2.5
-    },
-    {
-      "name": "middle_center",
-      "pan": 22.5,
-      "tilt": -2.5
-    },
-    {
-      "name": "middle_right",
-      "pan": 0,
-      "tilt": -2.5
-    },
-    {
-      "name": "bottom_left",
-      "pan": 45,
-      "tilt": 10
-    },
-    {
-      "name": "bottom_center",
-      "pan": 22.5,
-      "tilt": 10
-    },
-    {
-      "name": "bottom_right",
-      "pan": 0,
-      "tilt": 10
-    }
-  ],
+  "video_sweep_path": {
+    "name": "top_right_to_bottom_left_sweep",
+    "positions": [
+      {
+        "name": "top_right",
+        "pan": 0,
+        "tilt": -15
+      },
+      {
+        "name": "bottom_left",
+        "pan": 45,
+        "tilt": 10
+      }
+    ]
+  },
   "observation": {
     "lights_on_brightness_threshold": 85,
     "person_confidence_threshold": 0.35,
     "motion_threshold": 0.025
-  },
-  "video_sweep_paths": [
-    {
-      "name": "top_right_to_bottom_left_sweep",
-      "positions": [
-        {
-          "name": "top_right",
-          "pan": 0,
-          "tilt": -15
-        },
-        {
-          "name": "bottom_left",
-          "pan": 45,
-          "tilt": 10
-        }
-      ]
-    }
-  ]
+  }
 }

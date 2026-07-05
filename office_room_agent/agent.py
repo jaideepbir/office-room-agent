@@ -4,10 +4,7 @@ import csv
 import datetime as dt
 import json
 import logging
-import os
-import signal
 import subprocess
-import sys
 import threading
 import time
 from dataclasses import dataclass
@@ -66,15 +63,12 @@ class OfficeRoomAgent:
             level=logging.INFO,
             format="%(asctime)s %(levelname)s %(message)s",
         )
-        self.stop_requested = False
         self.servo_state = ServoState()
         self.pi = None
         self.hog = cv2.HOGDescriptor()
         self.hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
         self.face = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
         self.previous_gray = None
-        self.current_date = self.local_now().date()
-        self.video_state_path = self.state_dir / "video-sweep-state.json"
 
     @staticmethod
     def load_config(path: Path) -> dict[str, Any]:
@@ -85,91 +79,13 @@ class OfficeRoomAgent:
     def local_now() -> dt.datetime:
         return dt.datetime.now().astimezone()
 
-    def run(self, duration_seconds: float | None = None) -> None:
-        signal.signal(signal.SIGTERM, self.request_stop)
-        signal.signal(signal.SIGINT, self.request_stop)
-        self.write_startup_note()
-        positions = self.config["scan_positions"]
-        interval = float(self.config["capture_interval_seconds"])
-        index = 0
-        deadline = None if duration_seconds is None else time.monotonic() + duration_seconds
-        while not self.stop_requested:
-            if deadline is not None and time.monotonic() >= deadline:
-                break
-            started = time.monotonic()
-            now = self.local_now()
-            if now.date() != self.current_date:
-                self.write_daily_report(self.current_date)
-                self.current_date = now.date()
-                self.previous_gray = None
-            position = positions[index % len(positions)]
-            index += 1
-            row = self.capture_position(position)
-            self.append_csv(row)
-            elapsed = time.monotonic() - started
-            sleep_seconds = max(0.0, interval - elapsed)
-            if deadline is not None:
-                sleep_seconds = min(sleep_seconds, max(0.0, deadline - time.monotonic()))
-            self.sleep_interruptible(sleep_seconds)
-        self.write_daily_report(self.current_date)
-        self.center_servos()
-        self.close_servo()
-
     def run_video_window(self, duration_seconds: float) -> None:
-        signal.signal(signal.SIGTERM, self.request_stop)
-        signal.signal(signal.SIGINT, self.request_stop)
-        self.write_startup_note()
+        logging.info("office room agent starting with config %s", self.config_path)
         now = self.local_now()
         row = self.capture_video_sweep(now, duration_seconds)
         self.append_csv(row)
         self.write_daily_report(now.date())
-        self.center_servos()
         self.close_servo()
-
-    def request_stop(self, _signum, _frame) -> None:
-        self.stop_requested = True
-
-    def sleep_interruptible(self, seconds: float) -> None:
-        deadline = time.monotonic() + seconds
-        while not self.stop_requested and time.monotonic() < deadline:
-            time.sleep(min(0.2, deadline - time.monotonic()))
-
-    def write_startup_note(self) -> None:
-        logging.info("office room agent starting with config %s", self.config_path)
-
-    def capture_position(self, position: dict[str, Any]) -> dict[str, Any]:
-        now = self.local_now()
-        stamp = now.strftime("%Y%m%d_%H%M%S_%f")
-        day_dir = self.image_dir / now.strftime("%Y-%m-%d")
-        day_dir.mkdir(parents=True, exist_ok=True)
-        image_path = day_dir / f"{stamp}_{position['name']}.jpg"
-        row = {
-            "timestamp": now.isoformat(timespec="seconds"),
-            "date": now.strftime("%Y-%m-%d"),
-            "position": position["name"],
-            "pan": position["pan"],
-            "tilt": position["tilt"],
-            "image_path": str(image_path),
-            "video_path": "",
-            "lights_on": "",
-            "avg_brightness": "",
-            "person_count": "",
-            "multiple_people": "",
-            "likely_activity": "",
-            "motion_score": "",
-            "status": "ok",
-            "error": "",
-        }
-        try:
-            self.move_servos(float(position["pan"]), float(position["tilt"]))
-            time.sleep(float(self.config["servo"]["settle_seconds"]))
-            self.take_photo(image_path)
-            row.update(self.observe(image_path))
-        except Exception as exc:
-            row["status"] = "error"
-            row["error"] = repr(exc)
-            logging.exception("capture failed at %s", position["name"])
-        return row
 
     def capture_video_sweep(self, now: dt.datetime, duration_seconds: float) -> dict[str, Any]:
         stamp = now.strftime("%Y%m%d_%H%M%S_%f")
@@ -179,10 +95,11 @@ class OfficeRoomAgent:
         day_image_dir.mkdir(parents=True, exist_ok=True)
         video_path = day_video_dir / f"{stamp}_sweep.mp4"
         thumbnail_path = day_image_dir / f"{stamp}_sweep_thumbnail.jpg"
+        positions = self.config["video_sweep_path"]["positions"]
         row = {
             "timestamp": now.isoformat(timespec="seconds"),
             "date": now.strftime("%Y-%m-%d"),
-            "position": "video_sweep",
+            "position": self.config["video_sweep_path"]["name"],
             "pan": "",
             "tilt": "",
             "image_path": str(thumbnail_path),
@@ -197,11 +114,10 @@ class OfficeRoomAgent:
             "error": "",
         }
         try:
-            positions, sweep_name = self.next_video_sweep_path()
-            row["position"] = sweep_name
             first = positions[0]
             self.move_servos(float(first["pan"]), float(first["tilt"]))
-            time.sleep(float(self.config["servo"].get("pre_record_settle_seconds", 4.0)))
+            time.sleep(float(self.config["servo"].get("pre_record_settle_seconds", 5.0)))
+            self.log_power_status("before video")
             stop_event = threading.Event()
             servo_thread = threading.Thread(
                 target=self.sweep_servos,
@@ -212,6 +128,7 @@ class OfficeRoomAgent:
             self.record_video(video_path, duration_seconds)
             stop_event.set()
             servo_thread.join(timeout=5)
+            self.log_power_status("after video")
             self.extract_thumbnail(video_path, thumbnail_path)
             row.update(self.observe(thumbnail_path))
         except Exception as exc:
@@ -220,26 +137,15 @@ class OfficeRoomAgent:
             logging.exception("video sweep failed")
         return row
 
-    def next_video_sweep_path(self) -> tuple[list[dict[str, Any]], str]:
-        paths = self.config.get("video_sweep_paths")
-        if not paths:
-            return self.config.get("video_sweep_positions") or self.config["scan_positions"], "video_sweep"
-        state = {"index": 0}
-        try:
-            state.update(json.loads(self.video_state_path.read_text()))
-        except FileNotFoundError:
-            pass
-        except Exception:
-            logging.exception("failed to read video sweep state")
-        index = int(state.get("index", 0)) % len(paths)
-        path = paths[index]
-        self.video_state_path.write_text(json.dumps({"index": index + 1}) + "\n", encoding="utf-8")
-        return path["positions"], path.get("name", f"video_sweep_{index}")
+    def log_power_status(self, context: str) -> None:
+        proc = subprocess.run(["vcgencmd", "get_throttled"], text=True, capture_output=True, timeout=5)
+        if proc.returncode == 0:
+            logging.info("%s power status: %s", context, proc.stdout.strip())
+        else:
+            logging.warning("%s power status unavailable: %s", context, (proc.stderr or "").strip())
 
     def sweep_servos(self, positions: list[dict[str, Any]], duration_seconds: float, stop_event: threading.Event) -> None:
         servo_cfg = self.config["servo"]
-        if not positions:
-            return
         points = [
             (
                 self.clamp(float(position["pan"]), float(servo_cfg["pan_min"]), float(servo_cfg["pan_max"])),
@@ -247,10 +153,7 @@ class OfficeRoomAgent:
             )
             for position in positions
         ]
-        if len(points) == 1:
-            self.move_servos(points[0][0], points[0][1])
-            return
-        step_ms = float(servo_cfg.get("step_ms", 50))
+        step_ms = float(servo_cfg["step_ms"])
         segment_seconds = duration_seconds / (len(points) - 1)
         for start, target in zip(points, points[1:]):
             start_pan, start_tilt = start
@@ -268,9 +171,6 @@ class OfficeRoomAgent:
                 time.sleep(step_ms / 1000)
 
     def ensure_servo(self):
-        servo_cfg = self.config["servo"]
-        if not servo_cfg.get("enabled", True):
-            return None
         if pigpio is None:
             raise RuntimeError("pigpio Python module is not available")
         if self.pi and self.pi.connected:
@@ -294,34 +194,21 @@ class OfficeRoomAgent:
         return t * t * (3.0 - 2.0 * t)
 
     @staticmethod
-    def map_angle(angle: float, in_min=-90.0, in_max=90.0, out_min=250.0, out_max=1250.0) -> float:
-        return (angle - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
-
-    @staticmethod
     def map_pulsewidth(angle: float, in_min=-90.0, in_max=90.0, out_min=500.0, out_max=2500.0) -> float:
         return (angle - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
     def set_servo(self, pin: int, angle: float) -> None:
         pi = self.ensure_servo()
-        if pi is None:
-            return
         servo_cfg = self.config["servo"]
-        if servo_cfg.get("control_mode") == "pulsewidth":
-            pulse_min = float(servo_cfg.get("pulse_min_us", 500))
-            pulse_max = float(servo_cfg.get("pulse_max_us", 2500))
-            pi.set_servo_pulsewidth(pin, self.map_pulsewidth(angle, out_min=pulse_min, out_max=pulse_max))
-            return
-        pi.set_PWM_frequency(pin, 50)
-        pi.set_PWM_range(pin, 10000)
-        pi.set_PWM_dutycycle(pin, self.map_angle(angle))
+        pulse_min = float(servo_cfg["pulse_min_us"])
+        pulse_max = float(servo_cfg["pulse_max_us"])
+        pi.set_servo_pulsewidth(pin, self.map_pulsewidth(angle, out_min=pulse_min, out_max=pulse_max))
 
     def move_servos(self, pan: float, tilt: float) -> None:
         servo_cfg = self.config["servo"]
-        if not servo_cfg.get("enabled", True):
-            return
         pan = self.clamp(pan, float(servo_cfg["pan_min"]), float(servo_cfg["pan_max"]))
         tilt = self.clamp(tilt, float(servo_cfg["tilt_min"]), float(servo_cfg["tilt_max"]))
-        step_ms = float(servo_cfg.get("step_ms", 50))
+        step_ms = float(servo_cfg["step_ms"])
         steps = max(1, int(float(servo_cfg["smooth_move_ms"]) / step_ms))
         start_pan = self.servo_state.pan
         start_tilt = self.servo_state.tilt
@@ -334,43 +221,10 @@ class OfficeRoomAgent:
             time.sleep(step_ms / 1000)
         self.servo_state = ServoState(pan=pan, tilt=tilt)
 
-    def center_servos(self) -> None:
-        try:
-            self.move_servos(0.0, 0.0)
-        except Exception:
-            logging.exception("failed to center servos during shutdown")
-
     def close_servo(self) -> None:
         if self.pi:
             self.pi.stop()
             self.pi = None
-
-    def take_photo(self, output: Path) -> None:
-        camera = self.config["camera"]
-        cmd = [
-            "rpicam-still",
-            "--timeout",
-            str(int(camera["timeout_ms"])),
-            "--nopreview",
-            "--width",
-            str(int(camera["width"])),
-            "--height",
-            str(int(camera["height"])),
-            "-o",
-            str(output),
-        ]
-        if camera.get("hflip", False):
-            cmd.append("--hflip")
-        if camera.get("vflip", False):
-            cmd.append("--vflip")
-        if camera.get("autofocus_mode"):
-            cmd += ["--autofocus-mode", str(camera["autofocus_mode"])]
-        if camera.get("autofocus_on_capture", False):
-            cmd.append("--autofocus-on-capture")
-        proc = subprocess.run(cmd, text=True, capture_output=True, timeout=10)
-        if proc.returncode != 0:
-            combined = (proc.stdout or "") + (proc.stderr or "")
-            raise RuntimeError(f"rpicam-still failed with exit {proc.returncode}: {combined.strip()}")
 
     def record_video(self, output: Path, duration_seconds: float) -> None:
         camera = self.config["camera"]
@@ -408,17 +262,7 @@ class OfficeRoomAgent:
 
     def extract_thumbnail(self, video_path: Path, thumbnail_path: Path) -> None:
         proc = subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-loglevel",
-                "error",
-                "-i",
-                str(video_path),
-                "-frames:v",
-                "1",
-                str(thumbnail_path),
-            ],
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", str(video_path), "-frames:v", "1", str(thumbnail_path)],
             text=True,
             capture_output=True,
             timeout=15,
@@ -448,7 +292,7 @@ class OfficeRoomAgent:
 
     def estimate_people(self, image, gray) -> int:
         small = cv2.resize(image, (640, int(image.shape[0] * 640 / image.shape[1])))
-        rects, weights = self.hog.detectMultiScale(small, winStride=(8, 8), padding=(16, 16), scale=1.05)
+        _rects, weights = self.hog.detectMultiScale(small, winStride=(8, 8), padding=(16, 16), scale=1.05)
         threshold = float(self.config["observation"]["person_confidence_threshold"])
         bodies = sum(1 for weight in weights if float(weight) >= threshold)
         faces = self.face.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(35, 35))
@@ -499,7 +343,6 @@ class OfficeRoomAgent:
         csv_path = self.log_dir / f"captures-{day.isoformat()}.csv"
         if not csv_path.exists():
             return None
-        rows = []
         with csv_path.open("r", newline="", encoding="utf-8") as f:
             rows = list(csv.DictReader(f))
         if not rows:
@@ -512,7 +355,8 @@ class OfficeRoomAgent:
         lights_on_rows = [r for r in ok_rows if r.get("lights_on") == "true"]
         activities: dict[str, int] = {}
         for row in ok_rows:
-            activities[row.get("likely_activity", "unknown")] = activities.get(row.get("likely_activity", "unknown"), 0) + 1
+            activity = row.get("likely_activity", "unknown")
+            activities[activity] = activities.get(activity, 0) + 1
         generated = self.local_now().isoformat(timespec="seconds")
         lines = [
             f"# Office Room Report - {day.isoformat()}",
@@ -545,10 +389,9 @@ class OfficeRoomAgent:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Office room pan/tilt camera capture agent")
+    parser = argparse.ArgumentParser(description="Office room calibrated video sweep agent")
     parser.add_argument("--config", default=str(Path.home() / "code/projects/office-room-agent/config.json"))
-    parser.add_argument("--once", action="store_true", help="Capture one full scan pass and exit")
-    parser.add_argument("--duration-seconds", type=float, help="Run for a bounded capture window and exit")
+    parser.add_argument("--duration-seconds", type=float, default=20.0, help="Video duration for the sweep")
     parser.add_argument("--report", help="Generate report for YYYY-MM-DD and exit")
     args = parser.parse_args()
 
@@ -557,18 +400,7 @@ def main() -> None:
         report = agent.write_daily_report(dt.date.fromisoformat(args.report))
         print(report or "no report generated")
         return
-    if args.once:
-        for position in agent.config["scan_positions"]:
-            row = agent.capture_position(position)
-            agent.append_csv(row)
-        agent.write_daily_report(agent.local_now().date())
-        agent.center_servos()
-        agent.close_servo()
-        return
-    if agent.config.get("capture_mode") == "video" and args.duration_seconds:
-        agent.run_video_window(args.duration_seconds)
-    else:
-        agent.run(duration_seconds=args.duration_seconds)
+    agent.run_video_window(args.duration_seconds)
 
 
 if __name__ == "__main__":
