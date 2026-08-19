@@ -9,7 +9,7 @@ User=jaideepbir
 Group=jaideepbir
 WorkingDirectory=/home/jaideepbir/code/projects/office-room-agent
 ExecStart=/usr/bin/python3 -m office_room_agent --config /home/jaideepbir/code/projects/office-room-agent/config.json --duration-seconds 15
-TimeoutStartSec=30
+TimeoutStartSec=90
 
 [Install]
 WantedBy=multi-user.target

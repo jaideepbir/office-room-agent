@@ -58,6 +58,8 @@ class OfficeRoomAgent:
         for path in (self.image_dir, self.video_dir, self.log_dir, self.report_dir, self.state_dir):
             path.mkdir(parents=True, exist_ok=True)
 
+
+        self.servo_state_path = self.state_dir / 'servo_state.json'
         logging.basicConfig(
             filename=str(self.log_dir / "agent-errors.log"),
             level=logging.INFO,
@@ -114,14 +116,16 @@ class OfficeRoomAgent:
             "error": "",
         }
         try:
-            first = positions[0]
-            self.move_servos(float(first["pan"]), float(first["tilt"]))
-            time.sleep(float(self.config["servo"].get("pre_record_settle_seconds", 5.0)))
+            current = {"name": "start", "pan": float(self.servo_state.pan), "tilt": float(self.servo_state.tilt)}
+            forward = positions
+            reverse = list(reversed(positions))[1:-1] if len(positions) > 2 else []
+            sweep_positions = [current] + forward + reverse
+            time.sleep(float(self.config.get("servo", {}).get("pre_record_settle_seconds", 0.5)))
             self.log_power_status("before video")
             stop_event = threading.Event()
             servo_thread = threading.Thread(
                 target=self.sweep_servos,
-                args=(positions, duration_seconds, stop_event),
+                args=(sweep_positions, duration_seconds, stop_event),
                 daemon=True,
             )
             servo_thread.start()
@@ -144,31 +148,144 @@ class OfficeRoomAgent:
         else:
             logging.warning("%s power status unavailable: %s", context, (proc.stderr or "").strip())
 
+    
     def sweep_servos(self, positions: list[dict[str, Any]], duration_seconds: float, stop_event: threading.Event) -> None:
-        servo_cfg = self.config["servo"]
-        points = [
-            (
-                self.clamp(float(position["pan"]), float(servo_cfg["pan_min"]), float(servo_cfg["pan_max"])),
-                self.clamp(float(position["tilt"]), float(servo_cfg["tilt_min"]), float(servo_cfg["tilt_max"])),
-            )
-            for position in positions
-        ]
-        step_ms = float(servo_cfg["step_ms"])
-        segment_seconds = duration_seconds / (len(points) - 1)
-        for start, target in zip(points, points[1:]):
-            start_pan, start_tilt = start
-            target_pan, target_tilt = target
-            steps = max(1, int(segment_seconds * 1000 / step_ms))
-            for i in range(steps + 1):
-                if stop_event.is_set():
-                    return
-                eased = self.ease_in_out(i / steps)
-                pan = start_pan + (target_pan - start_pan) * eased
-                tilt = start_tilt + (target_tilt - start_tilt) * eased
-                self.set_servo(int(servo_cfg["pan_pin"]), pan)
-                self.set_servo(int(servo_cfg["tilt_pin"]), tilt)
-                self.servo_state = ServoState(pan=pan, tilt=tilt)
-                time.sleep(step_ms / 1000)
+        servo_cfg = self.config['servo']
+        try:
+            pi = self.ensure_servo()
+        except Exception:
+            pi = None
+
+        forward = positions
+        reverse = list(reversed(positions))
+        if len(reverse) > 2:
+            reverse = reverse[1:-1]
+        else:
+            reverse = []
+        full = forward + reverse
+        pts = []
+        for item in full:
+            pan = float(item.get('pan', self.servo_state.pan))
+            tilt = float(item.get('tilt', self.servo_state.tilt))
+            pts.append((pan, tilt))
+        if not pts:
+            return
+
+        step_ms = float(servo_cfg.get('step_ms', 20))
+        total_steps = max(1, int(round(duration_seconds * 1000.0 / step_ms)))
+
+        pulse_min = float(servo_cfg.get('pulse_min_us', 500))
+        pulse_max = float(servo_cfg.get('pulse_max_us', 2500))
+        pan_pin = int(servo_cfg.get('pan_pin', 13))
+        tilt_pin = int(servo_cfg.get('tilt_pin', 12))
+        arc_amp = float(servo_cfg.get('arc_amplitude_degrees', 0.0))
+        arc_invert = bool(servo_cfg.get('arc_invert', False))
+        state_save_interval = float(servo_cfg.get('state_save_interval_seconds', 1.0))
+        last_save = getattr(self, '_last_servo_state_save', 0.0)
+        telemetry_enabled = bool(servo_cfg.get('telemetry_enabled', False))
+        telemetry_file = None
+        telemetry_flush_interval = int(servo_cfg.get('telemetry_flush_interval_steps', 10))
+        if telemetry_enabled:
+            from datetime import datetime
+            try:
+                tf = self.log_dir / ("pulsewidth-telemetry-" + datetime.now().strftime('%Y%m%d_%H%M%S') + '.csv')
+                telemetry_file = tf.open('w', encoding='utf-8')
+                telemetry_file.write('ts,step,pan,tilt,pan_pw,tilt_pw\n')
+            except Exception:
+                telemetry_file = None
+
+
+
+        smoothing_alpha_pan = float(servo_cfg.get('smoothing_alpha_pan', servo_cfg.get('smoothing_alpha', 0.75)))
+        smoothing_alpha_tilt = float(servo_cfg.get('smoothing_alpha_tilt', servo_cfg.get('smoothing_alpha', 0.75)))
+        last_sent_pan = float(getattr(self.servo_state, 'pan', 0.0))
+        last_sent_tilt = float(getattr(self.servo_state, 'tilt', 0.0))
+
+        def try_save_state(now_ts):
+            nonlocal last_save
+            if (now_ts - last_save) >= state_save_interval:
+                try:
+                    tmp_path = self.servo_state_path.with_suffix('.json.tmp')
+                    state = {'pan': float(self.servo_state.pan), 'tilt': float(self.servo_state.tilt)}
+                    tmp_path.write_text(json.dumps(state) + '\n', encoding='utf-8')
+                    tmp_path.replace(self.servo_state_path)
+                    last_save = now_ts
+                except Exception:
+                    logging.exception('failed to save servo state')
+
+        num_segments = len(pts) - 1
+        for step in range(total_steps + 1):
+            if stop_event.is_set():
+                return
+            progress = step / float(total_steps)
+            eased = self.ease_in_out(progress)
+            pos = eased * num_segments
+            seg = int(np.floor(pos))
+            frac = pos - seg
+            if seg >= num_segments:
+                seg = num_segments - 1
+                frac = 1.0
+            s_pan, s_tilt = pts[seg]
+            e_pan, e_tilt = pts[seg+1]
+            pan = s_pan + (e_pan - s_pan) * frac
+            tilt = s_tilt + (e_tilt - s_tilt) * frac
+            arc_sign = -1.0 if arc_invert else 1.0
+            if arc_amp:
+                arc = arc_sign * arc_amp * float(np.sin(np.pi * frac))
+                tilt = tilt + arc
+            if pi is not None:
+                try:
+                    pi.set_servo_pulsewidth(pan_pin, self.map_pulsewidth(pan, out_min=pulse_min, out_max=pulse_max))
+                    pi.set_servo_pulsewidth(tilt_pin, self.map_pulsewidth(tilt, out_min=pulse_min, out_max=pulse_max))
+                except Exception:
+                    self.set_servo(pan_pin, pan)
+                    self.set_servo(tilt_pin, tilt)
+            else:
+                self.set_servo(pan_pin, pan)
+                self.set_servo(tilt_pin, tilt)
+            # apply smoothing to reduce jerk
+            try:
+                sm_pan = last_sent_pan + smoothing_alpha_pan * (pan - last_sent_pan)
+                sm_tilt = last_sent_tilt + smoothing_alpha_tilt * (tilt - last_sent_tilt)
+                try:
+                    max_tilt_step = float(servo_cfg.get('max_tilt_step_deg', 0.06))
+                    d = sm_tilt - last_sent_tilt
+                    if abs(d) > max_tilt_step:
+                        sm_tilt = last_sent_tilt + (max_tilt_step if d>0 else -max_tilt_step)
+                except Exception:
+                    pass
+            except Exception:
+                sm_pan = pan
+                sm_tilt = tilt
+            # send smoothed values to servos
+            if pi is not None:
+                try:
+                    pi.set_servo_pulsewidth(pan_pin, self.map_pulsewidth(sm_pan, out_min=pulse_min, out_max=pulse_max))
+                    pi.set_servo_pulsewidth(tilt_pin, self.map_pulsewidth(sm_tilt, out_min=pulse_min, out_max=pulse_max))
+                except Exception:
+                    self.set_servo(pan_pin, sm_pan)
+                    self.set_servo(tilt_pin, sm_tilt)
+            else:
+                self.set_servo(pan_pin, sm_pan)
+                self.set_servo(tilt_pin, sm_tilt)
+            last_sent_pan = sm_pan
+            last_sent_tilt = sm_tilt
+            self.servo_state = ServoState(pan=sm_pan, tilt=sm_tilt)
+            try_save_state(time.time())
+# write telemetry row if enabled
+            try:
+                if telemetry_file is not None:
+                    pan_pw = self.map_pulsewidth(sm_pan, out_min=pulse_min, out_max=pulse_max)
+                    tilt_pw = self.map_pulsewidth(sm_tilt, out_min=pulse_min, out_max=pulse_max)
+                    telemetry_file.write(f"{time.time()},{step},{sm_pan:.6f},{sm_tilt:.6f},{pan_pw:.2f},{tilt_pw:.2f}\n")
+                    if (step % telemetry_flush_interval) == 0:
+                        try:
+                            telemetry_file.flush()
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+            time.sleep(step_ms / 1000.0)
 
     def ensure_servo(self):
         if pigpio is None:
