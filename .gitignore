@@ -1,4 +1,12 @@
-config.json
+# backups and editors
+*~
+*.bak
+*.bak*
+*.swp
+# python
 __pycache__/
 *.pyc
-.venv/
+# mac
+.DS_Store
+# telemetry/log data
+office-room-agent-data/
